@@ -60,6 +60,7 @@ public class ScanQueueTag extends AbstractTableModel implements IMessageEditorCo
         scanQueue.add(mjSplitPane);
         tabs.addTab("扫描队列", scanQueue);
     }
+
     //设置request,response面板调用方法
     @Override
     public IHttpService getHttpService() {
@@ -75,7 +76,8 @@ public class ScanQueueTag extends AbstractTableModel implements IMessageEditorCo
     public byte[] getResponse() {
         return currentlyDisplayedItem.getResponse();
     }
-//设置任务栏面板调用方法
+
+    //设置任务栏面板调用方法
 //    设置行数
     @Override
     public int getRowCount() {
@@ -87,7 +89,8 @@ public class ScanQueueTag extends AbstractTableModel implements IMessageEditorCo
     public int getColumnCount() {
         return 6;
     }
-//    设置字段名称
+
+    //    设置字段名称
     @Override
     public String getColumnName(int columnIndex) {
         switch (columnIndex) {
@@ -106,12 +109,14 @@ public class ScanQueueTag extends AbstractTableModel implements IMessageEditorCo
         }
         return null;
     }
-//    获取字段类型
+
+    //    获取字段类型
     @Override
     public Class<?> getColumnClass(int columnIndex) {
         return String.class;
     }
-//    获取字段值
+
+    //    获取字段值
     @Override
     public Object getValueAt(int rowIndex, int columnIndex) {
         TablesData datas = this.Udatas.get(rowIndex);
@@ -176,7 +181,6 @@ public class ScanQueueTag extends AbstractTableModel implements IMessageEditorCo
      * @param Length
      * @param issue
      * @param requestResponse
-
      * @return int id
      */
     public int save(int id, String url, String statusCode,
@@ -238,12 +242,12 @@ public class ScanQueueTag extends AbstractTableModel implements IMessageEditorCo
         final IHttpRequestResponse requestResponse;
 
         public TablesData(int id, String url, String statusCode,
-                          String Length, String issue,  String startTime,
+                          String Length, String issue, String startTime,
                           IHttpRequestResponse requestResponse) {
             this.id = id;
             this.url = url;
             this.statusCode = statusCode;
-            this.Length= Length;
+            this.Length = Length;
             this.issue = issue;
             this.startTime = startTime;
             this.requestResponse = requestResponse;

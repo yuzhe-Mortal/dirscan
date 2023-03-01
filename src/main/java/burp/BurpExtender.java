@@ -14,7 +14,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 
-
 public class BurpExtender implements IBurpExtender, IHttpListener {
 
     private IBurpExtenderCallbacks callbacks;
@@ -46,7 +45,6 @@ public class BurpExtender implements IBurpExtender, IHttpListener {
         this.tags = new Tags(callbacks, NAME);
 
 
-
         // 从外部文件读取新路径
         newPaths = this.yamlReader.getStringList("scan.dir");
 
@@ -55,6 +53,7 @@ public class BurpExtender implements IBurpExtender, IHttpListener {
         callbacks.registerHttpListener(this);
         this.executorService = Executors.newFixedThreadPool(10);
     }
+
     /**
      * 基本信息输出
      */
@@ -80,7 +79,7 @@ public class BurpExtender implements IBurpExtender, IHttpListener {
             return;
         }
         String messageLevel = this.yamlReader.getString("messageLevel");
-        List<String> KeyWords=this.yamlReader.getStringList("KeyWords");
+        List<String> KeyWords = this.yamlReader.getStringList("KeyWords");
         // 获取请求的 URL
         CustomBurpUrl baseBurpUrl = new CustomBurpUrl(this.callbacks, messageInfo);
         IHttpRequestResponsePersisted message = callbacks.saveBuffersToTempFiles(messageInfo);
@@ -89,11 +88,11 @@ public class BurpExtender implements IBurpExtender, IHttpListener {
         String urlString = url.toString();
 
         if (!this.isUrlwhiteListSuffix(baseBurpUrl)) {
-            return ;
+            return;
         }
         // 判断当前请求后缀,是否为url黑名单后缀
         if (this.isUrlBlackListSuffix(baseBurpUrl)) {
-            return ;
+            return;
         }
 
         // 如果 URL 已经访问过，直接返回
@@ -107,105 +106,106 @@ public class BurpExtender implements IBurpExtender, IHttpListener {
         int lastSlashIndex = url.getPath().lastIndexOf('/');
         String resourcePath = url.getPath().substring(lastSlashIndex + 1);
 
-        for (String KewWord:KeyWords){
-            if(resourcePath.toLowerCase().contains(KewWord)){
-                this.stdout.println("[-]find KewWord:"+KewWord+"URL:"+urlString);
+        for (String KewWord : KeyWords) {
+            if (resourcePath.toLowerCase().contains(KewWord)) {
+                this.stdout.println("[-]find KewWord:" + KewWord + "URL:" + urlString);
             }
         }
 
         // 递归访问上级目录
         String path = url.getPath();
-        String UserUrl=new String();
+        String UserUrl = new String();
         if (!path.equals("/")) {
             path = path.endsWith("/") ? path : path + "/";
-            path =path.startsWith("/") ? path : "/"+path ;
+            path = path.startsWith("/") ? path : "/" + path;
             String[] pathParts = path.split("/");
             //获取domain
             String IUrl = url.getProtocol() + "://" + url.getHost() + ":" + url.getPort();
-            for (String dir : pathParts){
-                if (dir.contains("=")){
+            for (String dir : pathParts) {
+                if (dir.contains("=")) {
                     continue;
                 }
-                    if(messageLevel.equals("ALL")&&!this.DirList.contains(dir) ){
+                if (messageLevel.equals("ALL") && !this.DirList.contains(dir)) {
 
-                        this.DirList.add(dir);
-                        this.stdout.println(dir);
-                    }
-                    IUrl = IUrl + "/" + dir;
+                    this.DirList.add(dir);
+                    this.stdout.println(dir);
+                }
+                IUrl = IUrl + "/" + dir;
+                IUrl = IUrl.replaceAll("/$", "");
+                for (String UserPath : newPaths) {
+                    UserUrl = IUrl + "/" + UserPath;
                     IUrl = IUrl.replaceAll("/$", "");
-                    for(String UserPath : newPaths){
-                        UserUrl=IUrl+"/"+UserPath;
-                        IUrl = IUrl.replaceAll("/$", "");
-                        try {
-                            if (this.visitedUrls.contains(UserUrl)) {
-                                continue;
-                            }
-                            this.visitedUrls.add(UserUrl);
-                            URL parentUrl = new URL(UserUrl);
-                            this.executorService.submit(() -> {
-                                try {
-                                    reptile(messageInfo, parentUrl);
-                                } catch (MalformedURLException e) {
-                                    e.printStackTrace();
-                                }
-                            });
-                        } catch (Exception e) {
-                            callbacks.printOutput("Error: " + e.getMessage());
+                    try {
+                        if (this.visitedUrls.contains(UserUrl)) {
+                            continue;
                         }
+                        this.visitedUrls.add(UserUrl);
+                        URL parentUrl = new URL(UserUrl);
+                        this.executorService.submit(() -> {
+                            try {
+                                reptile(messageInfo, parentUrl);
+                            } catch (MalformedURLException e) {
+                                e.printStackTrace();
+                            }
+                        });
+                    } catch (Exception e) {
+                        callbacks.printOutput("Error: " + e.getMessage());
                     }
-        }
-            }
-        }
-        public void reptile(IHttpRequestResponse messageInfo,URL url) throws MalformedURLException {
-            String Url=url.getPath();
-            //test是排除误报请求
-            String test=url.toString()+"/test_qaz_test";
-            this.visitedUrls.add(test);
-
-            List<String> headers =helpers.analyzeRequest(messageInfo.getRequest()).getHeaders();
-            List<String> Testheaders = helpers.analyzeRequest(messageInfo.getRequest()).getHeaders();
-
-            headers.set(0, "GET "+Url+" HTTP/1.1");
-            Testheaders.set(0, "GET "+test+" HTTP/1.1");
-
-            byte[] newRequest = helpers.buildHttpMessage(headers, null);
-            byte[] TestNewRequest = helpers.buildHttpMessage(Testheaders, null);
-            //发送请求
-            IHttpRequestResponse newHttpRequestResponse=callbacks.makeHttpRequest(messageInfo.getHttpService(),newRequest);
-            IHttpRequestResponse newHttpRequestResponseTest=callbacks.makeHttpRequest(messageInfo.getHttpService(), TestNewRequest);
-
-            IResponseInfo responseInfo = callbacks.getHelpers().analyzeResponse(newHttpRequestResponse.getResponse());
-
-            int bodyLength1 = newHttpRequestResponse.getResponse().length;
-            int bodyLength2 = newHttpRequestResponseTest.getResponse().length;
-            int responseStatusCode = responseInfo.getStatusCode();
-            String contentType=responseInfo.getStatedMimeType();
-
-            if((responseStatusCode==200)&&bodyLength1!=bodyLength2&&bodyLength1!=0) {
-                if (contentType != null && (!contentType.toLowerCase().contains("jpeg") || !contentType.toLowerCase().contains("png"))) {
-                    this.tags.getScanQueueTagClass().add(
-                            Url,
-                            responseStatusCode + "",
-                            bodyLength1 + "",
-                            "Find Dir",
-                            newHttpRequestResponse
-                    );
                 }
             }
-            return;
         }
+    }
+
+    public void reptile(IHttpRequestResponse messageInfo, URL url) throws MalformedURLException {
+        String Url = url.getPath();
+        //test是排除误报请求
+        String test = url.toString() + "/test_qaz_test";
+        this.visitedUrls.add(test);
+
+        List<String> headers = helpers.analyzeRequest(messageInfo.getRequest()).getHeaders();
+        List<String> Testheaders = helpers.analyzeRequest(messageInfo.getRequest()).getHeaders();
+
+        headers.set(0, "GET " + Url + " HTTP/1.1");
+        Testheaders.set(0, "GET " + test + " HTTP/1.1");
+
+        byte[] newRequest = helpers.buildHttpMessage(headers, null);
+        byte[] TestNewRequest = helpers.buildHttpMessage(Testheaders, null);
+        //发送请求
+        IHttpRequestResponse newHttpRequestResponse = callbacks.makeHttpRequest(messageInfo.getHttpService(), newRequest);
+        IHttpRequestResponse newHttpRequestResponseTest = callbacks.makeHttpRequest(messageInfo.getHttpService(), TestNewRequest);
+
+        IResponseInfo responseInfo = callbacks.getHelpers().analyzeResponse(newHttpRequestResponse.getResponse());
+
+        int bodyLength1 = newHttpRequestResponse.getResponse().length;
+        int bodyLength2 = newHttpRequestResponseTest.getResponse().length;
+        int responseStatusCode = responseInfo.getStatusCode();
+        String contentType = responseInfo.getStatedMimeType();
+
+        if ((responseStatusCode == 200) && bodyLength1 != bodyLength2 && bodyLength1 != 0) {
+            if (contentType != null && (!contentType.toLowerCase().contains("jpeg") || !contentType.toLowerCase().contains("png"))) {
+                this.tags.getScanQueueTagClass().add(
+                        Url,
+                        responseStatusCode + "",
+                        bodyLength1 + "",
+                        "Find Dir",
+                        newHttpRequestResponse
+                );
+            }
+        }
+        return;
+    }
+
     private boolean isUrlwhiteListSuffix(CustomBurpUrl burpUrl) {
         if (!this.yamlReader.getBoolean("urlWhiteListSuffix.config.isStart")) {
             return false;
         }
         String urlSuffix;
         String noParameterUrl = burpUrl.getRequestPath();
-        int i=noParameterUrl.lastIndexOf(".");
-        if(i==-1){
-            urlSuffix="";
-        }
-        else {
-            urlSuffix = noParameterUrl.substring( i+ 1);
+        int i = noParameterUrl.lastIndexOf(".");
+        if (i == -1) {
+            urlSuffix = "";
+        } else {
+            urlSuffix = noParameterUrl.substring(i + 1);
         }
         List<String> suffixList = this.yamlReader.getStringList("urlWhiteListSuffix.suffixList");
         if (suffixList == null || suffixList.size() == 0) {
@@ -243,5 +243,5 @@ public class BurpExtender implements IBurpExtender, IHttpListener {
         return false;
     }
 
-    }
+}
 

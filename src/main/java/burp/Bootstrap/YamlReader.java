@@ -52,7 +52,7 @@ public class YamlReader {
             return properties.get(key);
         }
         Map<String, Map<String, Object>> finalValue = new HashMap<>();
-        for (int i = 0; i < separatorKeys.length-1 ; i++) {
+        for (int i = 0; i < separatorKeys.length - 1; i++) {
             if (i == 0) {
                 finalValue = (Map) properties.get(separatorKeys[i]);
                 continue;
@@ -62,11 +62,10 @@ public class YamlReader {
             }
             finalValue = (Map) finalValue.get(separatorKeys[i]);
         }
-        if (finalValue==null){
+        if (finalValue == null) {
             return null;
-        }
-        else {
-            Object value=finalValue.get(separatorKeys[separatorKeys.length - 1]);
+        } else {
+            Object value = finalValue.get(separatorKeys[separatorKeys.length - 1]);
             return value;
         }
 
