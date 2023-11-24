@@ -3,15 +3,18 @@ package burp;
 import burp.Bootstrap.CustomBurpUrl;
 import burp.Bootstrap.YamlReader;
 import burp.Ui.Tags;
-;
+
 import java.io.PrintWriter;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 
 public class BurpExtender implements IBurpExtender, IHttpListener {
@@ -87,6 +90,7 @@ public class BurpExtender implements IBurpExtender, IHttpListener {
         URL url = requestInfo.getUrl();
         String urlString = url.toString();
 
+        // 判断当前请求后缀,是否为url白名单后缀
         if (!this.isUrlwhiteListSuffix(baseBurpUrl)) {
             return;
         }
@@ -173,21 +177,34 @@ public class BurpExtender implements IBurpExtender, IHttpListener {
         //发送请求
         IHttpRequestResponse newHttpRequestResponse = callbacks.makeHttpRequest(messageInfo.getHttpService(), newRequest);
         IHttpRequestResponse newHttpRequestResponseTest = callbacks.makeHttpRequest(messageInfo.getHttpService(), TestNewRequest);
-
+        if (newHttpRequestResponse == null || newHttpRequestResponse.getResponse() == null) {
+            return;
+        }
         IResponseInfo responseInfo = callbacks.getHelpers().analyzeResponse(newHttpRequestResponse.getResponse());
 
-        int bodyLength1 = newHttpRequestResponse.getResponse().length;
-        int bodyLength2 = newHttpRequestResponseTest.getResponse().length;
+
+        // 获取响应的body部分
+        byte[] responseBody = Arrays.copyOfRange(newHttpRequestResponse.getResponse(), responseInfo.getBodyOffset(), newHttpRequestResponse.getResponse().length);
+        byte[] responseBodyTest = Arrays.copyOfRange(newHttpRequestResponseTest.getResponse(), responseInfo.getBodyOffset(), newHttpRequestResponseTest.getResponse().length);
+        String bodyAsString = new String(responseBody);
+        Pattern pattern = Pattern.compile("password\":\"\\*\\*\\*\\*\\*\\*\"");
+        Matcher matcher = pattern.matcher(bodyAsString);
+        int bodyLength1 = responseBody.length;
+        int bodyLength2 = responseBodyTest.length;
         int responseStatusCode = responseInfo.getStatusCode();
         String contentType = responseInfo.getStatedMimeType();
 
-        if ((responseStatusCode == 200) && bodyLength1 != bodyLength2 && bodyLength1 != 0) {
-            if (contentType != null && (!contentType.toLowerCase().contains("jpeg") || !contentType.toLowerCase().contains("png"))) {
+        if ((responseStatusCode == 200) && bodyLength1 != bodyLength2 && bodyLength1 > 50 && bodyLength1 < 500000 && Math.abs(bodyLength2 - bodyLength1) > 28) {
+            if (contentType != null && (!contentType.toLowerCase().contains("jpeg") && !contentType.toLowerCase().contains("png") && !contentType.toLowerCase().contains("html"))) {
+                String IssueType = "Find Dir";
+                if (matcher.find()) {
+                    IssueType = "env";
+                }
                 this.tags.getScanQueueTagClass().add(
                         Url,
                         responseStatusCode + "",
                         bodyLength1 + "",
-                        "Find Dir",
+                        IssueType,
                         newHttpRequestResponse
                 );
             }

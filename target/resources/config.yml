@@ -56,11 +56,7 @@ scan:
   dir:
     - ""
     - "env"
-    - "dump"
     - "trial"
-    - "dump"
-    - "env"
-    - "heapdump"
     - "actuator"
     - "manage"
     - "backup"

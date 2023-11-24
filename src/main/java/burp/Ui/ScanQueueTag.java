@@ -4,7 +4,9 @@ import burp.*;
 
 import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
+import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableModel;
+import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -33,7 +35,7 @@ public class ScanQueueTag extends AbstractTableModel implements IMessageEditorCo
 
         // 任务栏面板
         Utable = new URLTable(ScanQueueTag.this);
-//        添加滚动条
+        //        添加滚动条
         UscrollPane = new JScrollPane(Utable);
 
         // 请求与响应界面的分隔面板规则
@@ -227,7 +229,31 @@ public class ScanQueueTag extends AbstractTableModel implements IMessageEditorCo
             currentlyDisplayedItem = dataEntry.requestResponse;
             super.changeSelection(row, col, toggle, extend);
         }
+
+        public Color getRowColor(int row) {
+            TablesData data = ScanQueueTag.this.Udatas.get(convertRowIndexToModel(row));
+            if (data.issue.equals("env")) {
+                return Color.RED;
+            } else {
+                return null;
+            }
+        }
+
+        @Override
+        public Component prepareRenderer(TableCellRenderer renderer, int row, int column) {
+            Component c = super.prepareRenderer(renderer, row, column);
+
+            // 如果不是绘制表格头部，改变颜色
+            if (!isRowSelected(row)) {
+                Color color = getRowColor(row);
+                c.setBackground(color == null ? getBackground() : color);
+                c.setForeground(color == null ? getForeground() : Color.WHITE);
+            }
+
+            return c;
+        }
     }
+
 
     /**
      * 界面显示数据存储模块
