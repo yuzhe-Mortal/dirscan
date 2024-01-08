@@ -34,7 +34,7 @@ scan:
       
       - "*.dnslog.cn"
       - "*.ceye.io"
-      - "*.fofa.so"
+      - "*.fofa.info"
       - "*.shodan.io"
       - "*.github.com"
       - "*.fofa.info"
@@ -66,7 +66,7 @@ scan:
 
 urlWhiteListSuffix:
   config:
-    isStart: true
+    isStart: false
   suffixList:
     - ""
 # url黑名单后缀
@@ -102,14 +102,12 @@ urlBlackListSuffix:
     - "epub"
     - "gif"
     - "gz"
-    - "ico"
     - "ics"
     - "ief"
     - "jar"
     - "jfif"
     - "jpe"
     - "jpeg"
-    - "jpg"
     - "m3u"
     - "mid"
     - "midi"
@@ -133,7 +131,6 @@ urlBlackListSuffix:
     - "pbm"
     - "pdf"
     - "pgm"
-    - "png"
     - "pnm"
     - "ppm"
     - "ppt"
@@ -179,8 +176,29 @@ urlBlackListSuffix:
     - "mkv"
     - "flv"
     - "vob"
-    - "txt"
-    - "php"
-    - "asp"
+
 
 # 应用程序配置
+reptile:
+  - name: "XFireServlet"
+    path:
+      - "webservices"
+      - "web_services"
+      - "services"
+    status: "404"
+    regex: "(\\bwsdl\\b)"
+  - name: "spring"
+    path:
+      - "env"
+    status: ""
+    regex: "(\"\\*\\*\\*\\*\\*\\*\")"
+  - name: "BucketList"
+    path:
+      - ""
+    status: ""
+    regex: "(\\bListBucketResult\\b)"
+
+
+
+
+

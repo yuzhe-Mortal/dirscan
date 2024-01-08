@@ -101,4 +101,17 @@ public class YamlReader {
     public LinkedHashMap<String, Boolean> getLinkedHashMap(String key) {
         return (LinkedHashMap<String, Boolean>) this.getValueByKey(key);
     }
+
+    public List<Map<String, Object>> getMapList(String key) {
+        Object value = this.getValueByKey(key);
+        if (value instanceof List<?>) {
+            List<?> list = (List<?>) value;
+            if (!list.isEmpty() && list.get(0) instanceof Map<?, ?>) {
+                return (List<Map<String, Object>>) list;
+            }
+        }
+        return null; // 或者抛出一个异常，表示找不到或者类型不匹配
+    }
+
+
 }

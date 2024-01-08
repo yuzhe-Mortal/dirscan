@@ -7,10 +7,7 @@ import burp.Ui.Tags;
 import java.io.PrintWriter;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Locale;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
@@ -22,10 +19,10 @@ public class BurpExtender implements IBurpExtender, IHttpListener {
     private IBurpExtenderCallbacks callbacks;
     private IExtensionHelpers helpers;
     private List<String> visitedUrls;  // 已访问的 URL 集合
-    private List<String> newPaths;    // 从外部文件读取的新路径
+    private List<Map<String, Object>> reptiles;    // 从外部文件读取的新路径
     private YamlReader yamlReader;
-    public static String NAME = "SensitiveDirScan";
-    public static String VERSION = "1.0.1";
+    public static String NAME = "DirScan";
+    public static String VERSION = "1.2";
     private PrintWriter stdout;
     private Tags tags;
     private PrintWriter stderr;
@@ -49,7 +46,7 @@ public class BurpExtender implements IBurpExtender, IHttpListener {
 
 
         // 从外部文件读取新路径
-        newPaths = this.yamlReader.getStringList("scan.dir");
+        this.reptiles = yamlReader.getMapList("reptile");
 
         this.stdout.println(basicInformationOutput());
 
@@ -65,13 +62,10 @@ public class BurpExtender implements IBurpExtender, IHttpListener {
         String str2 = String.format("%s Load the success\n", NAME);
         String str3 = String.format("VERSION: %s\n", VERSION);
         String str4 = "author: yuzhe\n";
-        String str5 = "QQ: 3303003493\n";
-        String str6 = "WeChat: a3303003493\n";
-        String str7 = "GitHub: https://github.com/pmiaowu\n";
-        String str8 = "Blog: https://www.yuque.com/pmiaowu\n";
-        String str9 = String.format("downloadLink: %s\n", "https://github.com/pmiaowu/BurpShiroPassiveScan");
+        ;
         String str10 = "===================================\n";
         String detail = str1 + str2 + str3 + str4 + str10;
+
         return detail;
     }
 
@@ -81,6 +75,8 @@ public class BurpExtender implements IBurpExtender, IHttpListener {
         if (messageIsRequest) {
             return;
         }
+        List<String> domainNameBlacklist = this.yamlReader.getStringList("scan.domainName.blacklist");
+        List<String> domainNameWhitelist = this.yamlReader.getStringList("scan.domainName.whitelist");
         String messageLevel = this.yamlReader.getString("messageLevel");
         List<String> KeyWords = this.yamlReader.getStringList("KeyWords");
         // 获取请求的 URL
@@ -89,6 +85,19 @@ public class BurpExtender implements IBurpExtender, IHttpListener {
         IRequestInfo requestInfo = helpers.analyzeRequest(message);
         URL url = requestInfo.getUrl();
         String urlString = url.toString();
+
+        if (domainNameBlacklist != null && domainNameBlacklist.size() >= 1) {
+            if (isMatchDomainName(baseBurpUrl.getRequestHost(), domainNameBlacklist)) {
+                return;
+            }
+        }
+
+        // 判断域名白名单
+        if (domainNameWhitelist != null && domainNameWhitelist.size() >= 1) {
+            if (!isMatchDomainName(baseBurpUrl.getRequestHost(), domainNameWhitelist)) {
+                return;
+            }
+        }
 
         // 判断当前请求后缀,是否为url白名单后缀
         if (!this.isUrlwhiteListSuffix(baseBurpUrl)) {
@@ -136,85 +145,81 @@ public class BurpExtender implements IBurpExtender, IHttpListener {
                 }
                 IUrl = IUrl + "/" + dir;
                 IUrl = IUrl.replaceAll("/$", "");
-                for (String UserPath : newPaths) {
-                    UserUrl = IUrl + "/" + UserPath;
-                    IUrl = IUrl.replaceAll("/$", "");
-                    try {
-                        if (this.visitedUrls.contains(UserUrl)) {
-                            continue;
-                        }
-                        this.visitedUrls.add(UserUrl);
-                        URL parentUrl = new URL(UserUrl);
-                        this.executorService.submit(() -> {
-                            try {
-                                reptile(messageInfo, parentUrl);
-                            } catch (MalformedURLException e) {
-                                e.printStackTrace();
+                for (Map<String, Object> reptile : reptiles) {
+                    String name = (String) reptile.get("name");
+                    List<String> paths = (List<String>) reptile.get("path");
+                    String status = (String) reptile.get("status");
+                    String regex = (String) reptile.get("regex");
+                    for (String UserPath : paths) {
+                        UserUrl = IUrl + "/" + UserPath;
+                        IUrl = IUrl.replaceAll("/$", "");
+                        try {
+                            if (this.visitedUrls.contains(UserUrl)) {
+                                continue;
                             }
-                        });
-                    } catch (Exception e) {
-                        callbacks.printOutput("Error: " + e.getMessage());
+                            this.visitedUrls.add(UserUrl);
+                            URL parentUrl = new URL(UserUrl);
+                            this.executorService.submit(() -> {
+                                try {
+                                    reptile(messageInfo, name, parentUrl, status, regex);
+                                } catch (MalformedURLException e) {
+                                    e.printStackTrace();
+                                }
+                            });
+                        } catch (Exception e) {
+                            callbacks.printOutput("Error: " + e.getMessage());
+                        }
                     }
+
                 }
             }
         }
     }
 
-    public void reptile(IHttpRequestResponse messageInfo, URL url) throws MalformedURLException {
+    public void reptile(IHttpRequestResponse messageInfo, String name, URL url, String status, String regex) throws MalformedURLException {
+        //构建请求
         String Url = url.getPath();
-        //test是排除误报请求
-        String test = url.toString() + "/test_qaz_test";
-        this.visitedUrls.add(test);
-
+        int StatusCode = 0;
         List<String> headers = helpers.analyzeRequest(messageInfo.getRequest()).getHeaders();
-        List<String> Testheaders = helpers.analyzeRequest(messageInfo.getRequest()).getHeaders();
-
         headers.set(0, "GET " + Url + " HTTP/1.1");
-        Testheaders.set(0, "GET " + test + " HTTP/1.1");
-
         byte[] newRequest = helpers.buildHttpMessage(headers, null);
-        byte[] TestNewRequest = helpers.buildHttpMessage(Testheaders, null);
-        //发送请求
         IHttpRequestResponse newHttpRequestResponse = callbacks.makeHttpRequest(messageInfo.getHttpService(), newRequest);
-        IHttpRequestResponse newHttpRequestResponseTest = callbacks.makeHttpRequest(messageInfo.getHttpService(), TestNewRequest);
         if (newHttpRequestResponse == null || newHttpRequestResponse.getResponse() == null) {
             return;
         }
         IResponseInfo responseInfo = callbacks.getHelpers().analyzeResponse(newHttpRequestResponse.getResponse());
-
-
         // 获取响应的body部分
         byte[] responseBody = Arrays.copyOfRange(newHttpRequestResponse.getResponse(), responseInfo.getBodyOffset(), newHttpRequestResponse.getResponse().length);
-        byte[] responseBodyTest = Arrays.copyOfRange(newHttpRequestResponseTest.getResponse(), responseInfo.getBodyOffset(), newHttpRequestResponseTest.getResponse().length);
-        String bodyAsString = new String(responseBody);
-        Pattern pattern = Pattern.compile("password\":\"\\*\\*\\*\\*\\*\\*\"");
-        Matcher matcher = pattern.matcher(bodyAsString);
-        int bodyLength1 = responseBody.length;
-        int bodyLength2 = responseBodyTest.length;
-        int responseStatusCode = responseInfo.getStatusCode();
-        String contentType = responseInfo.getStatedMimeType();
 
-        if ((responseStatusCode == 200) && bodyLength1 != bodyLength2 && bodyLength1 > 50 && bodyLength1 < 500000 && Math.abs(bodyLength2 - bodyLength1) > 28) {
-            if (contentType != null && (!contentType.toLowerCase().contains("jpeg") && !contentType.toLowerCase().contains("png") && !contentType.toLowerCase().contains("html"))) {
-                String IssueType = "Find Dir";
-                if (matcher.find()) {
-                    IssueType = "env";
-                }
-                this.tags.getScanQueueTagClass().add(
-                        Url,
-                        responseStatusCode + "",
-                        bodyLength1 + "",
-                        IssueType,
-                        newHttpRequestResponse
-                );
+        String bodyAsString = new String(responseBody);
+        Pattern pattern = Pattern.compile(regex);
+        Matcher matcher = pattern.matcher(bodyAsString);
+        if (!status.equals("")) {
+            try {
+                StatusCode = Integer.parseInt(status);
+            } catch (NumberFormatException e) {
+                StatusCode = 1;
             }
+        } else {
+            StatusCode = 1;
+        }
+        int bodyLength = responseBody.length;
+        int responseStatusCode = responseInfo.getStatusCode();
+        if (matcher.find() && (StatusCode == 1 || responseStatusCode == StatusCode) && bodyLength < 500000) {
+            this.tags.getScanQueueTagClass().add(
+                    Url,
+                    responseStatusCode + "",
+                    bodyLength + "",
+                    name,
+                    newHttpRequestResponse
+            );
         }
         return;
     }
 
     private boolean isUrlwhiteListSuffix(CustomBurpUrl burpUrl) {
         if (!this.yamlReader.getBoolean("urlWhiteListSuffix.config.isStart")) {
-            return false;
+            return true;
         }
         String urlSuffix;
         String noParameterUrl = burpUrl.getRequestPath();
@@ -259,6 +264,86 @@ public class BurpExtender implements IBurpExtender, IHttpListener {
 
         return false;
     }
+
+    /**
+     * 判断是否查找的到指定的域名
+     *
+     * @param domainName     需匹配的域名
+     * @param domainNameList 待匹配的域名列表
+     * @return
+     */
+    private static Boolean isMatchDomainName(String domainName, List<String> domainNameList) {
+        domainName = domainName.trim();
+
+        if (domainName.length() <= 0) {
+            return false;
+        }
+
+        if (domainNameList == null || domainNameList.size() <= 0) {
+            return false;
+        }
+
+        if (domainName.contains(":")) {
+            domainName = domainName.substring(0, domainName.indexOf(":"));
+        }
+
+        String reverseDomainName = new StringBuffer(domainName).reverse().toString();
+
+        for (String domainName2 : domainNameList) {
+            domainName2 = domainName2.trim();
+
+            if (domainName2.length() <= 0) {
+                continue;
+            }
+
+            if (domainName2.contains(":")) {
+                domainName2 = domainName2.substring(0, domainName2.indexOf(":"));
+            }
+
+            String reverseDomainName2 = new StringBuffer(domainName2).reverse().toString();
+
+            if (domainName.equals(domainName2)) {
+                return true;
+            }
+
+            if (reverseDomainName.contains(".") && reverseDomainName2.contains(".")) {
+                List<String> splitDomainName = new ArrayList<String>(Arrays.asList(reverseDomainName.split("[.]")));
+
+                List<String> splitDomainName2 = new ArrayList<String>(Arrays.asList(reverseDomainName2.split("[.]")));
+
+                if (splitDomainName.size() <= 0 || splitDomainName2.size() <= 0) {
+                    continue;
+                }
+
+                if (splitDomainName.size() < splitDomainName2.size()) {
+                    for (int i = splitDomainName.size(); i < splitDomainName2.size(); i++) {
+                        splitDomainName.add("*");
+                    }
+                }
+
+                if (splitDomainName.size() > splitDomainName2.size()) {
+                    for (int i = splitDomainName2.size(); i < splitDomainName.size(); i++) {
+                        splitDomainName2.add("*");
+                    }
+                }
+
+                int ii = 0;
+                for (int i = 0; i < splitDomainName.size(); i++) {
+                    if (splitDomainName2.get(i).equals("*")) {
+                        ii = ii + 1;
+                    } else if (splitDomainName.get(i).equals(splitDomainName2.get(i))) {
+                        ii = ii + 1;
+                    }
+                }
+
+                if (ii == splitDomainName.size()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
 
 }
 
